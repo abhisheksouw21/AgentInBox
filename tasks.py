@@ -116,6 +116,12 @@ def _safe_contains(text: str, needle: str) -> bool:
     return needle.lower() in (text or "").lower()
 
 
+def _strict_open_interval_score(raw_score: float) -> float:
+    """Clamp score to strict open interval (0, 1) for validator compliance."""
+    eps = 0.01
+    return max(eps, min(1.0 - eps, raw_score))
+
+
 def grade_shipping_status(state: Dict[str, Any]) -> Dict[str, Any]:
     components: Dict[str, float] = {}
     penalties: Dict[str, float] = {}
@@ -133,7 +139,8 @@ def grade_shipping_status(state: Dict[str, Any]) -> Dict[str, Any]:
     if not outbound_messages:
         penalties["no_customer_response"] = 0.2
 
-    score = max(0.0, min(1.0, sum(components.values()) - sum(penalties.values())))
+    raw_score = sum(components.values()) - sum(penalties.values())
+    score = _strict_open_interval_score(raw_score)
     done = bool(components.get("correct_delivery_date"))
     reason = (
         "Shared the correct delivery date with customer."
@@ -172,7 +179,8 @@ def grade_valid_refund(state: Dict[str, Any]) -> Dict[str, Any]:
     if not outbound_messages:
         penalties["no_customer_response"] = 0.1
 
-    score = max(0.0, min(1.0, sum(components.values()) - sum(penalties.values())))
+    raw_score = sum(components.values()) - sum(penalties.values())
+    score = _strict_open_interval_score(raw_score)
     done = (
         bool(components.get("refund_applied"))
         and bool(components.get("queried_order_db"))
@@ -224,7 +232,8 @@ def grade_out_of_warranty(state: Dict[str, Any]) -> Dict[str, Any]:
     if order.get("refund_status") == "refunded":
         penalties["invalid_refund_for_warranty_case"] = 0.4
 
-    score = max(0.0, min(1.0, sum(components.values()) - sum(penalties.values())))
+    raw_score = sum(components.values()) - sum(penalties.values())
+    score = _strict_open_interval_score(raw_score)
     done = bool(components.get("correct_escalation"))
     reason = (
         "Correctly escalated out-of-warranty complaint."
