@@ -10,6 +10,12 @@ from models import Action, Observation, Reward, StepResult, ToolName
 from tasks import GRADERS, RETURN_POLICY_TEXT, get_task_fixture, initial_crm_state, list_task_ids
 
 
+def _strict_reward_score(value: float) -> float:
+    """Keep all emitted rewards in strict open interval (0, 1)."""
+    eps = 0.01
+    return max(eps, min(1.0 - eps, float(value)))
+
+
 class WhatsAppBusinessTriageEnv:
     """OpenEnv-compatible environment with reset(), step(), and state()."""
 
@@ -53,7 +59,7 @@ class WhatsAppBusinessTriageEnv:
         """Applies an action and returns observation, reward, done, and info."""
         if self._state.get("done"):
             reward = Reward(
-                score=0.0,
+                score=_strict_reward_score(0.0),
                 reason="Episode already finished. Call reset() for a new episode.",
                 partial_credit={},
                 penalties={"action_after_done": 0.0},
@@ -86,7 +92,7 @@ class WhatsAppBusinessTriageEnv:
         self._state["done"] = done
 
         reward = Reward(
-            score=float(graded["score"]),
+            score=_strict_reward_score(float(graded["score"])),
             reason=graded["reason"],
             partial_credit=graded["partial_credit"],
             penalties=graded["penalties"],

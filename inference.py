@@ -17,6 +17,11 @@ MODEL_NAME = os.environ.get("MODEL_NAME", "gpt-4o-mini")
 API_BASE_URL = os.environ.get("API_BASE_URL")
 
 
+def _strict_open_interval_score(value: float) -> float:
+    eps = 0.01
+    return max(eps, min(1.0 - eps, float(value)))
+
+
 def _build_system_prompt() -> str:
     return (
         "You are a support agent in a WhatsApp Business triage simulator. "
@@ -159,7 +164,7 @@ def run_episode(env: WhatsAppBusinessTriageEnv, client: OpenAI, task_id: str) ->
 
         result = env.step(action)
         done = result.done
-        final_reward = result.reward.score
+        final_reward = _strict_open_interval_score(result.reward.score)
 
         print(
             "[STEP] "
@@ -168,6 +173,7 @@ def run_episode(env: WhatsAppBusinessTriageEnv, client: OpenAI, task_id: str) ->
                     "task_id": task_id,
                     "step": step_count,
                     "action": action.model_dump(),
+                    "reward_score": final_reward,
                     "reward": result.reward.model_dump(),
                     "done": done,
                 },
@@ -180,6 +186,7 @@ def run_episode(env: WhatsAppBusinessTriageEnv, client: OpenAI, task_id: str) ->
         "task_id": task_id,
         "steps": step_count,
         "score": final_reward,
+        "task_score": final_reward,
         "final_state": env.state(),
         "last_observation": obs.model_dump(),
     }
@@ -225,6 +232,7 @@ def main() -> None:
                     {
                         "task_id": item["task_id"],
                         "score": item["score"],
+                        "task_score": item["task_score"],
                         "steps": item["steps"],
                     }
                     for item in results

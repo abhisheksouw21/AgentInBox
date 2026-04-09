@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel, ConfigDict, Field
 
 from env import WhatsAppBusinessTriageEnv
-from models import Action, Observation
+from models import Action, Observation, Reward
 
 
 class ResetRequest(BaseModel):
@@ -52,6 +52,12 @@ class StepRequest(BaseModel):
 class EnvStepResponse(BaseModel):
     observation: Dict[str, Any]
     reward: Optional[float]
+    done: bool
+
+
+class StepEnvelopeResponse(BaseModel):
+    observation: Dict[str, Any]
+    reward: Dict[str, Any]
     done: bool
 
 
@@ -109,6 +115,7 @@ def schema() -> Dict[str, Any]:
     return {
         "action": Action.model_json_schema(),
         "observation": Observation.model_json_schema(),
+        "reward": Reward.model_json_schema(),
         "state": {"type": "object"},
     }
 
@@ -136,13 +143,17 @@ def reset(payload: Optional[ResetRequest] = None) -> EnvStepResponse:
     "/step",
     tags=["interaction"],
     summary="Apply one tool action",
-    response_model=EnvStepResponse,
+    response_model=StepEnvelopeResponse,
 )
-def step(payload: StepRequest) -> EnvStepResponse:
-    result = _ENV.step(payload.action)
-    return EnvStepResponse(
+def step(payload: Dict[str, Any]) -> StepEnvelopeResponse:
+    # Accept both action body styles:
+    # 1) {"tool": "...", "arguments": {...}}
+    # 2) {"action": {"tool": "...", "arguments": {...}}, "timeout_s": ...}
+    action_payload = payload.get("action", payload)
+    result = _ENV.step(action_payload)
+    return StepEnvelopeResponse(
         observation=result.observation.model_dump(mode="json"),
-        reward=result.reward.score,
+        reward=result.reward.model_dump(mode="json"),
         done=result.done,
     )
 
