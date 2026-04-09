@@ -11,9 +11,8 @@ from tasks import GRADERS, RETURN_POLICY_TEXT, get_task_fixture, initial_crm_sta
 
 
 def _strict_reward_score(value: float) -> float:
-    """Keep all emitted rewards in strict open interval (0, 1)."""
-    eps = 0.01
-    return max(eps, min(1.0 - eps, float(value)))
+    """Match my_env: strict (0,1) with stable rounding for validators."""
+    return round(min(max(float(value), 0.01), 0.99), 3)
 
 
 class WhatsAppBusinessTriageEnv:

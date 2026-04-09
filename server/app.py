@@ -55,12 +55,6 @@ class EnvStepResponse(BaseModel):
     done: bool
 
 
-class StepEnvelopeResponse(BaseModel):
-    observation: Dict[str, Any]
-    reward: Dict[str, Any]
-    done: bool
-
-
 app = FastAPI(
     title="WhatsApp Business Triage Simulator",
     version="1.0.0",
@@ -143,17 +137,18 @@ def reset(payload: Optional[ResetRequest] = None) -> EnvStepResponse:
     "/step",
     tags=["interaction"],
     summary="Apply one tool action",
-    response_model=StepEnvelopeResponse,
+    response_model=EnvStepResponse,
 )
-def step(payload: Dict[str, Any]) -> StepEnvelopeResponse:
-    # Accept both action body styles:
+def step(payload: Dict[str, Any]) -> EnvStepResponse:
+    # Accept both action body styles (OpenEnv clients vary):
     # 1) {"tool": "...", "arguments": {...}}
     # 2) {"action": {"tool": "...", "arguments": {...}}, "timeout_s": ...}
     action_payload = payload.get("action", payload)
     result = _ENV.step(action_payload)
-    return StepEnvelopeResponse(
+    # Scalar reward matches openenv.core StepResult / reference my_env HTTP shape.
+    return EnvStepResponse(
         observation=result.observation.model_dump(mode="json"),
-        reward=result.reward.model_dump(mode="json"),
+        reward=result.reward.score,
         done=result.done,
     )
 

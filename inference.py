@@ -18,8 +18,9 @@ API_BASE_URL = os.environ.get("API_BASE_URL")
 
 
 def _strict_open_interval_score(value: float) -> float:
-    eps = 0.01
-    return max(eps, min(1.0 - eps, float(value)))
+    """Per my_env inference: avoid exact 0/1 boundaries (float-safe)."""
+    s = float(value)
+    return max(1e-6, min(s, 1.0 - 1e-6))
 
 
 def _build_system_prompt() -> str:
@@ -221,6 +222,7 @@ def main() -> None:
         results.append(run_episode(env, client, task_id))
 
     avg_score = sum(item["score"] for item in results) / len(results)
+    task_scores = {item["task_id"]: item["task_score"] for item in results}
     print(
         "[END] "
         + json.dumps(
@@ -228,6 +230,7 @@ def main() -> None:
                 "env_id": "whatsapp-business-triage-simulator",
                 "model_name": MODEL_NAME,
                 "average_score": round(avg_score, 4),
+                "task_scores": task_scores,
                 "results": [
                     {
                         "task_id": item["task_id"],

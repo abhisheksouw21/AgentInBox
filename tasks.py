@@ -117,9 +117,8 @@ def _safe_contains(text: str, needle: str) -> bool:
 
 
 def _strict_open_interval_score(raw_score: float) -> float:
-    """Clamp score to strict open interval (0, 1) for validator compliance."""
-    eps = 0.01
-    return max(eps, min(1.0 - eps, raw_score))
+    """Clamp to strict open interval (0, 1), same pattern as reference my_env graders."""
+    return round(min(max(float(raw_score), 0.01), 0.99), 3)
 
 
 def grade_shipping_status(state: Dict[str, Any]) -> Dict[str, Any]:
