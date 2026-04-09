@@ -4,7 +4,7 @@ name: WhatsApp Business Triage Simulator
 version: 0.1.0
 type: space
 runtime: fastapi
-app: server.app:app
+app: server.app:main
 port: 8000
 description: >
   A real-world customer support environment where an agent triages mock WhatsApp

@@ -151,3 +151,14 @@ def step(payload: StepRequest) -> EnvStepResponse:
 def state() -> Dict[str, Any]:
     return _ENV.state()
 
+
+def main() -> FastAPI:
+    """Return the ASGI application for OpenEnv multi-mode validators."""
+    return app
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run("server.app:app", host="0.0.0.0", port=8000)
+
