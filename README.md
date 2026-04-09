@@ -1,3 +1,13 @@
+---
+title: AgentInBox
+emoji: 🧰
+colorFrom: indigo
+colorTo: blue
+sdk: docker
+app_port: 8000
+pinned: false
+---
+
 # WhatsApp Business Triage Simulator (OpenEnv)
 
 A real-world OpenEnv environment where an AI agent acts as a WhatsApp Business customer support rep handling triage tickets with tool use and policy constraints.
