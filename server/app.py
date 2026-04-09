@@ -1,0 +1,152 @@
+"""FastAPI server exposing the WhatsApp Business Triage environment."""
+
+from __future__ import annotations
+
+from typing import Any, Dict, Optional
+
+from fastapi import FastAPI
+from pydantic import BaseModel, ConfigDict, Field
+
+from env import WhatsAppBusinessTriageEnv
+from models import Action, Observation
+
+
+class ResetRequest(BaseModel):
+    seed: Optional[int] = Field(default=None)
+    episode_id: Optional[str] = Field(default=None)
+    task_id: Optional[str] = Field(default=None)
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {},
+                {"task_id": "shipping_status_easy"},
+                {"seed": 42, "task_id": "valid_refund_medium"},
+            ]
+        }
+    )
+
+
+class StepRequest(BaseModel):
+    action: Dict[str, Any]
+    timeout_s: Optional[float] = Field(default=None)
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "action": {
+                        "tool": "query_order_db",
+                        "arguments": {"order_id": "ORD-1001"},
+                    }
+                },
+                {
+                    "action": {
+                        "tool": "send_whatsapp_message",
+                        "arguments": {"text": "Expected delivery is 2026-04-14"},
+                    }
+                },
+            ]
+        }
+    )
+
+
+class EnvStepResponse(BaseModel):
+    observation: Dict[str, Any]
+    reward: Optional[float]
+    done: bool
+
+
+app = FastAPI(
+    title="WhatsApp Business Triage Simulator",
+    version="1.0.0",
+    description=(
+        "OpenEnv-compatible API for WhatsApp customer support triage. "
+        "Use /reset, /step, and /state to run episodes."
+    ),
+    contact={"name": "Meta x Scaler Hackathon Submission"},
+    openapi_tags=[
+        {"name": "system", "description": "Service health and metadata endpoints."},
+        {"name": "interaction", "description": "Episode interaction endpoints."},
+    ],
+)
+
+_ENV = WhatsAppBusinessTriageEnv(seed=42)
+
+
+@app.get("/", tags=["system"], summary="API root")
+def root() -> Dict[str, Any]:
+    return {
+        "name": "WhatsApp Business Triage Simulator",
+        "status": "ok",
+        "docs": "/docs",
+        "health": "/health",
+        "endpoints": ["/reset", "/step", "/state", "/schema", "/metadata"],
+    }
+
+
+@app.get("/favicon.ico", tags=["system"], include_in_schema=False)
+def favicon() -> Dict[str, str]:
+    # Return a lightweight no-op response to avoid browser 404 noise.
+    return {"status": "no_favicon"}
+
+
+@app.get("/health", tags=["system"], summary="Health check")
+def health() -> Dict[str, str]:
+    return {"status": "healthy"}
+
+
+@app.get("/metadata", tags=["system"], summary="Environment metadata")
+def metadata() -> Dict[str, Any]:
+    return {
+        "name": "WhatsAppBusinessTriageEnv",
+        "description": "WhatsApp customer support triage simulation environment.",
+        "version": "1.0.0",
+        "author": "Meta x Scaler Hackathon Submission",
+    }
+
+
+@app.get("/schema", tags=["system"], summary="Action/observation/state schemas")
+def schema() -> Dict[str, Any]:
+    return {
+        "action": Action.model_json_schema(),
+        "observation": Observation.model_json_schema(),
+        "state": {"type": "object"},
+    }
+
+
+@app.post(
+    "/reset",
+    tags=["interaction"],
+    summary="Reset environment",
+    response_model=EnvStepResponse,
+)
+def reset(payload: ResetRequest) -> EnvStepResponse:
+    if payload.seed is not None:
+        global _ENV
+        _ENV = WhatsAppBusinessTriageEnv(seed=payload.seed)
+    obs = _ENV.reset(task_id=payload.task_id)
+    return EnvStepResponse(
+        observation=obs.model_dump(mode="json"),
+        reward=None,
+        done=False,
+    )
+
+
+@app.post(
+    "/step",
+    tags=["interaction"],
+    summary="Apply one tool action",
+    response_model=EnvStepResponse,
+)
+def step(payload: StepRequest) -> EnvStepResponse:
+    result = _ENV.step(payload.action)
+    return EnvStepResponse(
+        observation=result.observation.model_dump(mode="json"),
+        reward=result.reward.score,
+        done=result.done,
+    )
+
+
+@app.get("/state", tags=["interaction"], summary="Get full internal state")
+def state() -> Dict[str, Any]:
+    return _ENV.state()
+

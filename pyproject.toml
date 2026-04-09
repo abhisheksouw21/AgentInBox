@@ -1,0 +1,20 @@
+[project]
+name = "whatsapp-business-triage-openenv"
+version = "0.1.0"
+description = "OpenEnv WhatsApp Business Triage Simulator"
+requires-python = ">=3.10"
+dependencies = [
+  "openai>=1.30.0",
+  "pydantic>=2.6.0",
+  "PyYAML>=6.0.1",
+  "fastapi>=0.111.0",
+  "uvicorn>=0.30.0",
+]
+
+[project.scripts]
+server = "server.app:app"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+

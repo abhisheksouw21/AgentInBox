@@ -1,0 +1,74 @@
+spec_version: 1
+id: whatsapp-business-triage-simulator
+name: WhatsApp Business Triage Simulator
+version: 0.1.0
+type: space
+runtime: fastapi
+app: server.app:app
+port: 8000
+description: >
+  A real-world customer support environment where an agent triages mock WhatsApp
+  tickets, queries CRM data, applies return policy constraints, and decides
+  whether to respond directly or escalate to a human.
+
+entrypoint:
+  module: env
+  class_name: WhatsAppBusinessTriageEnv
+
+api:
+  reset: true
+  step: true
+  state: true
+
+models:
+  observation: models.Observation
+  action: models.Action
+  reward: models.Reward
+
+tags:
+  - openenv
+  - customer-support
+  - whatsapp
+  - triage
+  - tool-use
+
+difficulty_progression:
+  - easy
+  - medium
+  - hard
+
+tasks:
+  - id: shipping_status_easy
+    difficulty: easy
+    description: Agent answers shipping status with correct delivery date.
+    grader: tasks.grade_shipping_status
+    max_steps: 6
+  - id: valid_refund_medium
+    difficulty: medium
+    description: Agent processes valid refund after checking order and policy.
+    grader: tasks.grade_valid_refund
+    max_steps: 8
+  - id: warranty_complaint_hard
+    difficulty: hard
+    description: Agent escalates out-of-warranty complaint to human support.
+    grader: tasks.grade_out_of_warranty
+    max_steps: 8
+
+execution:
+  python: ">=3.10"
+  deterministic_seed: 42
+  episode_timeout_seconds: 120
+  baseline_inference_script: inference.py
+
+compliance:
+  reward_range:
+    min: 0.0
+    max: 1.0
+  requires_typed_models: true
+  requires_clean_reset: true
+  required_tools:
+    - query_order_db
+    - read_return_policy
+    - send_whatsapp_message
+    - escalate_to_human
+

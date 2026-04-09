@@ -1,0 +1,20 @@
+# Local reference dumps (large pasted files, not part of submission)
+external_refs/
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+
+# OS/editor noise
+.DS_Store
+.venv/
+__pycache__/
+server/__pycache__/
+external_refs/
+*.pyc
