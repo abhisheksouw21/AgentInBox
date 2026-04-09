@@ -119,11 +119,12 @@ def schema() -> Dict[str, Any]:
     summary="Reset environment",
     response_model=EnvStepResponse,
 )
-def reset(payload: ResetRequest) -> EnvStepResponse:
-    if payload.seed is not None:
+def reset(payload: Optional[ResetRequest] = None) -> EnvStepResponse:
+    req = payload or ResetRequest()
+    if req.seed is not None:
         global _ENV
-        _ENV = WhatsAppBusinessTriageEnv(seed=payload.seed)
-    obs = _ENV.reset(task_id=payload.task_id)
+        _ENV = WhatsAppBusinessTriageEnv(seed=req.seed)
+    obs = _ENV.reset(task_id=req.task_id)
     return EnvStepResponse(
         observation=obs.model_dump(mode="json"),
         reward=None,
