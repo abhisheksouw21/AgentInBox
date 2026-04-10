@@ -117,11 +117,27 @@ def _safe_contains(text: str, needle: str) -> bool:
 
 
 def _strict_open_interval_score(raw_score: float) -> float:
-    """Clamp to strict open interval (0, 1), same pattern as reference my_env graders."""
-    return round(min(max(float(raw_score), 0.01), 0.99), 3)
+    """Strict open interval (0, 1); never exactly 0.0 or 1.0."""
+    v = float(raw_score)
+    v = min(max(v, 0.01), 0.99)
+    return float(round(v, 6))
+
+
+def _coerce_grader_state(state: Dict[str, Any] | None, task_id: str) -> Dict[str, Any]:
+    """Validators may call graders with {} or partial state — fill from fixtures so we never crash."""
+    s: Dict[str, Any] = dict(state) if state else {}
+    if "task" not in s or not isinstance(s.get("task"), dict):
+        s["task"] = get_task_fixture(task_id)
+    if "crm" not in s or not isinstance(s.get("crm"), dict):
+        s["crm"] = initial_crm_state()
+    s.setdefault("flags", {})
+    s.setdefault("outbound_messages", [])
+    s.setdefault("now_date", "2026-04-09")
+    return s
 
 
 def grade_shipping_status(state: Dict[str, Any]) -> Dict[str, Any]:
+    state = _coerce_grader_state(state, TASK_SHIPPING_STATUS_EASY)
     components: Dict[str, float] = {}
     penalties: Dict[str, float] = {}
 
@@ -131,7 +147,7 @@ def grade_shipping_status(state: Dict[str, Any]) -> Dict[str, Any]:
 
     outbound_messages = state.get("outbound_messages", [])
     final_text = outbound_messages[-1]["text"] if outbound_messages else ""
-    expected_date = state["task"]["expected_delivery_date"]
+    expected_date = state["task"].get("expected_delivery_date", "2026-04-14")
     if _safe_contains(final_text, expected_date):
         components["correct_delivery_date"] = 0.7
 
@@ -147,7 +163,7 @@ def grade_shipping_status(state: Dict[str, Any]) -> Dict[str, Any]:
         else "Need to query order and send exact delivery date."
     )
     return {
-        "score": score,
+        "score": float(score),
         "reason": reason,
         "partial_credit": components,
         "penalties": penalties,
@@ -156,6 +172,7 @@ def grade_shipping_status(state: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def grade_valid_refund(state: Dict[str, Any]) -> Dict[str, Any]:
+    state = _coerce_grader_state(state, TASK_VALID_REFUND_MEDIUM)
     components: Dict[str, float] = {}
     penalties: Dict[str, float] = {}
     flags = state.get("flags", {})
@@ -191,7 +208,7 @@ def grade_valid_refund(state: Dict[str, Any]) -> Dict[str, Any]:
         else "Refund flow incomplete or missing required checks."
     )
     return {
-        "score": score,
+        "score": float(score),
         "reason": reason,
         "partial_credit": components,
         "penalties": penalties,
@@ -200,12 +217,16 @@ def grade_valid_refund(state: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _months_between(date_a: str, date_b: str) -> int:
-    dt_a = datetime.strptime(date_a, "%Y-%m-%d")
-    dt_b = datetime.strptime(date_b, "%Y-%m-%d")
+    try:
+        dt_a = datetime.strptime(date_a, "%Y-%m-%d")
+        dt_b = datetime.strptime(date_b, "%Y-%m-%d")
+    except ValueError:
+        return 0
     return (dt_b.year - dt_a.year) * 12 + (dt_b.month - dt_a.month)
 
 
 def grade_out_of_warranty(state: Dict[str, Any]) -> Dict[str, Any]:
+    state = _coerce_grader_state(state, TASK_WARRANTY_COMPLAINT_HARD)
     components: Dict[str, float] = {}
     penalties: Dict[str, float] = {}
     flags = state.get("flags", {})
@@ -240,7 +261,7 @@ def grade_out_of_warranty(state: Dict[str, Any]) -> Dict[str, Any]:
         else "Must escalate this complaint to human specialist."
     )
     return {
-        "score": score,
+        "score": float(score),
         "reason": reason,
         "partial_credit": components,
         "penalties": penalties,

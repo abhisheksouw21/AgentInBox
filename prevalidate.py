@@ -6,6 +6,7 @@ Run:
 
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import subprocess
@@ -19,7 +20,7 @@ from fastapi.testclient import TestClient
 from env import WhatsAppBusinessTriageEnv
 from models import Action
 from server.app import app
-from tasks import GRADERS, list_task_ids
+from tasks import GRADERS, list_task_ids, grade_out_of_warranty, grade_shipping_status, grade_valid_refund
 
 
 ROOT = Path(__file__).resolve().parent
@@ -99,6 +100,52 @@ def _check_graders_exist() -> tuple[bool, str]:
     return True, "all tasks have graders"
 
 
+def _strict_open_score_ok(score: float) -> bool:
+    """Match platform rule: strictly between 0 and 1 (exclude 0.0 and 1.0)."""
+    if not isinstance(score, (int, float)):
+        return False
+    s = float(score)
+    return 0.0 < s < 1.0
+
+
+def _check_grader_imports_and_scores() -> tuple[bool, str]:
+    """Same checks an external validator often runs: import grader paths from YAML and score with {}."""
+    path = ROOT / "openenv.yaml"
+    data = yaml.safe_load(path.read_text())
+    tasks = data.get("tasks") or []
+    if len(tasks) < 3:
+        return False, f"openenv.yaml must list at least 3 tasks, got {len(tasks)}"
+
+    for t in tasks:
+        tid = t.get("id")
+        grader_path = t.get("grader")
+        if not tid or not grader_path:
+            return False, f"task entry missing id or grader: {t}"
+        mod_name, _, fn_name = grader_path.rpartition(".")
+        if not mod_name or not fn_name:
+            return False, f"invalid grader path: {grader_path}"
+        try:
+            mod = importlib.import_module(mod_name)
+            fn = getattr(mod, fn_name)
+        except Exception as exc:
+            return False, f"cannot import {grader_path}: {exc}"
+        try:
+            out = fn({})
+        except Exception as exc:
+            return False, f"{grader_path}({{}}) raised: {exc}"
+        if not isinstance(out, dict) or "score" not in out:
+            return False, f"{grader_path} must return dict with score, got {type(out)}"
+        if not _strict_open_score_ok(float(out["score"])):
+            return False, f"{grader_path} score out of strict (0,1): {out['score']}"
+
+    # Direct function smoke test (same as YAML paths)
+    for fn in (grade_shipping_status, grade_valid_refund, grade_out_of_warranty):
+        out = fn({})
+        if not _strict_open_score_ok(float(out["score"])):
+            return False, f"{fn.__name__} on empty state bad score: {out!r}"
+    return True, "graders importable and return strict (0,1) scores even on empty state"
+
+
 def _check_inference_logging_format() -> tuple[bool, str]:
     # Keep this check lightweight and offline by scanning source format contract.
     src = (ROOT / "inference.py").read_text()
@@ -127,6 +174,7 @@ def main() -> None:
         ("manifest", _check_openenv_manifest),
         ("api_endpoints", _check_server_endpoints),
         ("graders", _check_graders_exist),
+        ("grader_contract", _check_grader_imports_and_scores),
         ("reward_range", _check_reward_range),
         ("inference_log_format", _check_inference_logging_format),
     ]

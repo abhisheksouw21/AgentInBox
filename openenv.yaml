@@ -62,8 +62,8 @@ execution:
 
 compliance:
   reward_range:
-    min: 0.0
-    max: 1.0
+    min: 0.01
+    max: 0.99
   requires_typed_models: true
   requires_clean_reset: true
   required_tools:
