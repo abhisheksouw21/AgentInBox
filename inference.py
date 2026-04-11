@@ -154,6 +154,9 @@ def run_episode(env: WhatsAppBusinessTriageEnv, client: OpenAI, task_id: str) ->
     done = False
     step_count = 0
     final_reward = 0.0
+    rewards_list = []
+
+    print("[START] " + f"task={task_id} env=whatsapp-business-triage-simulator model={MODEL_NAME}", flush=True)
 
     while not done and step_count < env.state()["max_steps"]:
         step_count += 1
@@ -166,22 +169,24 @@ def run_episode(env: WhatsAppBusinessTriageEnv, client: OpenAI, task_id: str) ->
         result = env.step(action)
         done = result.done
         final_reward = _strict_open_interval_score(result.reward.score)
+        rewards_list.append(final_reward)
+
+        action_str = json.dumps(action.model_dump())
+        done_val = str(done).lower()
+        error_val = "null"
 
         print(
-            "[STEP] "
-            + json.dumps(
-                {
-                    "task_id": task_id,
-                    "step": step_count,
-                    "action": action.model_dump(),
-                    "reward_score": final_reward,
-                    "reward": result.reward.model_dump(),
-                    "done": done,
-                },
-                default=str,
-            )
+            "[STEP] " + f"step={step_count} action={action_str} reward={final_reward:.2f} done={done_val} error={error_val}",
+            flush=True,
         )
         obs = result.observation
+
+    success = final_reward >= 0.1
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards_list) if rewards_list else "0.00"
+    print(
+        "[END] " + f"success={str(success).lower()} steps={step_count} score={final_reward:.3f} rewards={rewards_str}",
+        flush=True,
+    )
 
     return {
         "task_id": task_id,
@@ -205,44 +210,9 @@ def main() -> None:
     env = WhatsAppBusinessTriageEnv(seed=42)
     task_ids: List[str] = list_task_ids()
 
-    print(
-        "[START] "
-        + json.dumps(
-            {
-                "env_id": "whatsapp-business-triage-simulator",
-                "model_name": MODEL_NAME,
-                "api_base_url": API_BASE_URL or "default_openai",
-                "task_ids": task_ids,
-            }
-        )
-    )
-
     results = []
     for task_id in task_ids:
         results.append(run_episode(env, client, task_id))
-
-    avg_score = sum(item["score"] for item in results) / len(results)
-    task_scores = {item["task_id"]: item["task_score"] for item in results}
-    print(
-        "[END] "
-        + json.dumps(
-            {
-                "env_id": "whatsapp-business-triage-simulator",
-                "model_name": MODEL_NAME,
-                "average_score": round(avg_score, 4),
-                "task_scores": task_scores,
-                "results": [
-                    {
-                        "task_id": item["task_id"],
-                        "score": item["score"],
-                        "task_score": item["task_score"],
-                        "steps": item["steps"],
-                    }
-                    for item in results
-                ],
-            }
-        )
-    )
 
 
 if __name__ == "__main__":
