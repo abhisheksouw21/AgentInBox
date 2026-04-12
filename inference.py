@@ -6,6 +6,13 @@ import json
 import os
 from typing import Any, Dict, List
 
+try:
+    from rich.console import Console
+    from rich.panel import Panel
+    console = Console(stderr=True)
+except ImportError:
+    console = None
+
 from openai import OpenAI
 
 from env import WhatsAppBusinessTriageEnv
@@ -157,6 +164,8 @@ def run_episode(env: WhatsAppBusinessTriageEnv, client: OpenAI, task_id: str) ->
     rewards_list = []
 
     print("[START] " + f"task={task_id} env=whatsapp-business-triage-simulator model={MODEL_NAME}", flush=True)
+    if console:
+        console.print(Panel(f"[bold cyan]Starting Episode:[/bold cyan] {task_id}", border_style="cyan"))
 
     while not done and step_count < env.state()["max_steps"]:
         step_count += 1
@@ -179,6 +188,11 @@ def run_episode(env: WhatsAppBusinessTriageEnv, client: OpenAI, task_id: str) ->
             "[STEP] " + f"step={step_count} action={action_str} reward={final_reward:.2f} done={done_val} error={error_val}",
             flush=True,
         )
+        if console:
+            action_color = "green" if action.tool != "escalate_to_human" else "yellow"
+            tool_text = f"[{action_color}]{action.tool}[/{action_color}]"
+            console.print(f"  [bold]Step {step_count}:[/bold] Tool = {tool_text} | Reward = [bold green]{final_reward:.2f}[/bold green] | Done = {done}")
+        
         obs = result.observation
 
     success = final_reward >= 0.1
@@ -187,6 +201,9 @@ def run_episode(env: WhatsAppBusinessTriageEnv, client: OpenAI, task_id: str) ->
         "[END] " + f"success={str(success).lower()} steps={step_count} score={final_reward:.3f} rewards={rewards_str}",
         flush=True,
     )
+    if console:
+        success_color = "green" if success else "red"
+        console.print(Panel(f"Episode Completed!\nSuccess: [bold {success_color}]{success}[/bold {success_color}]\nFinal Score: [bold white]{final_reward:.3f}[/bold white]\nSteps taken: {step_count}", border_style=success_color))
 
     return {
         "task_id": task_id,

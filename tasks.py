@@ -157,11 +157,16 @@ def grade_shipping_status(state: Dict[str, Any]) -> Dict[str, Any]:
     raw_score = sum(components.values()) - sum(penalties.values())
     score = _strict_open_interval_score(raw_score)
     done = bool(components.get("correct_delivery_date"))
-    reason = (
-        "Shared the correct delivery date with customer."
-        if done
-        else "Need to query order and send exact delivery date."
-    )
+    reasons = []
+    if "queried_order_db" in components:
+        reasons.append("Queried order DB (+0.3)")
+    if "correct_delivery_date" in components:
+        reasons.append("Sent correct delivery date (+0.7)")
+    if "no_customer_response" in penalties:
+        reasons.append("No customer response (-0.2)")
+    if not reasons:
+        reasons.append("No meaningful actions taken")
+    reason = " | ".join(reasons) + (" => Task Done!" if done else " => Task Incomplete")
     return {
         "score": float(score),
         "reason": reason,
@@ -202,11 +207,22 @@ def grade_valid_refund(state: Dict[str, Any]) -> Dict[str, Any]:
         and bool(components.get("queried_order_db"))
         and bool(components.get("read_return_policy"))
     )
-    reason = (
-        "Refund processed with proper checks."
-        if done
-        else "Refund flow incomplete or missing required checks."
-    )
+    reasons = []
+    if "queried_order_db" in components:
+        reasons.append("Queried DB (+0.3)")
+    if "read_return_policy" in components:
+        reasons.append("Read policy (+0.3)")
+    if "refund_applied" in components:
+        reasons.append("Processed refund (+0.4)")
+    if "refunded_without_db_check" in penalties:
+        reasons.append("Refunded blindly without DB check (-0.3)")
+    if "refunded_without_policy_check" in penalties:
+        reasons.append("Refunded blindly without policy check (-0.2)")
+    if "no_customer_response" in penalties:
+        reasons.append("Did not reply to customer (-0.1)")
+    if not reasons:
+        reasons.append("No meaningful actions taken")
+    reason = " | ".join(reasons) + (" => Task Done!" if done else " => Task Incomplete")
     return {
         "score": float(score),
         "reason": reason,
@@ -255,11 +271,20 @@ def grade_out_of_warranty(state: Dict[str, Any]) -> Dict[str, Any]:
     raw_score = sum(components.values()) - sum(penalties.values())
     score = _strict_open_interval_score(raw_score)
     done = bool(components.get("correct_escalation"))
-    reason = (
-        "Correctly escalated out-of-warranty complaint."
-        if done
-        else "Must escalate this complaint to human specialist."
-    )
+    reasons = []
+    if "queried_order_db" in components:
+        reasons.append("Queried DB (+0.2)")
+    if "read_return_policy" in components:
+        reasons.append("Read policy (+0.2)")
+    if "correct_escalation" in components:
+        reasons.append("Correctly escalated (+0.6)")
+    if "hallucinated_discount" in penalties:
+        reasons.append("Hallucinated unauthorized discount (-0.5)")
+    if "invalid_refund_for_warranty_case" in penalties:
+        reasons.append("Issued invalid out-of-policy refund (-0.4)")
+    if not reasons:
+        reasons.append("No meaningful actions taken")
+    reason = " | ".join(reasons) + (" => Task Done!" if done else " => Task Incomplete")
     return {
         "score": float(score),
         "reason": reason,
