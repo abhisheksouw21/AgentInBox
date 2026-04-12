@@ -269,9 +269,42 @@ def grade_out_of_warranty(state: Dict[str, Any]) -> Dict[str, Any]:
         penalties["invalid_refund_for_warranty_case"] = 0.4
 
     raw_score = sum(components.values()) - sum(penalties.values())
-    score = _strict_open_interval_score(raw_score)
     done = bool(components.get("correct_escalation"))
     reasons = []
+
+    # === God Tier: LLM-as-a-Judge API ===
+    # We call OpenAI to parse the exact nuanced phrasing of the agent's escalation payload
+    # If the key is missing (i.e., running in basic validation mode), we gracefully fallback.
+    import os
+    import json
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if done and api_key:
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=api_key)
+            last_result = state.get("last_tool_result", {})
+            agent_reason = last_result.get("reason", "")
+            
+            sys_prompt = "You are a strict QA Judge evaluating an AI customer service agent's escalation reason. Return JSON strictly formatted as {\"bonus\": float, \"analysis\": string} where bonus is between 0.0 and 0.2 depending on how polite, precise, and legally sound the escalation reason is."
+            completion = client.chat.completions.create(
+                model=os.environ.get("MODEL_NAME", "gpt-4o-mini"),
+                response_format={"type": "json_object"},
+                messages=[
+                    {"role": "system", "content": sys_prompt},
+                    {"role": "user", "content": f"The agent's escalation log was: '{agent_reason}'"}
+                ],
+                temperature=0.0,
+                max_tokens=150
+            )
+            judge_data = json.loads(completion.choices[0].message.content)
+            bonus = float(judge_data.get("bonus", 0.0))
+            raw_score += bonus
+            reasons.append(f"LLM-Judge Analysis: {judge_data.get('analysis', 'Good')} (+{bonus:.2f})")
+        except Exception:
+            pass # Fallback cleanly to standard trajectory grading limits if API fails
+
+    score = _strict_open_interval_score(raw_score)
+
     if "queried_order_db" in components:
         reasons.append("Queried DB (+0.2)")
     if "read_return_policy" in components:

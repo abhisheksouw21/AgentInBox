@@ -29,7 +29,14 @@ class WhatsAppBusinessTriageEnv:
         self.reset()
 
     def reset(self, task_id: Optional[str] = None) -> Observation:
-        """Resets the environment with a clean CRM and returns initial observation."""
+        """Resets the environment with a clean CRM and returns initial observation.
+
+        Args:
+            task_id (Optional[str]): specific task instance to load. Cycle chosen if None.
+
+        Returns:
+            Observation: The initial webhook payload after reset.
+        """
         if task_id is None:
             task_id = self._task_cycle[self._task_cursor % len(self._task_cycle)]
             self._task_cursor += 1
@@ -57,7 +64,14 @@ class WhatsAppBusinessTriageEnv:
         return self._make_observation()
 
     def step(self, action: Action | Dict[str, Any]) -> StepResult:
-        """Applies an action and returns observation, reward, done, and info."""
+        """Applies an action and proceeds to the next environmental state.
+
+        Args:
+            action (Action | Dict[str, Any]): The discrete tool choice made by the agent.
+
+        Returns:
+            StepResult: Structured container holding Observation, Reward, terminal state bool, and diagnostics.
+        """
         if self._state.get("done"):
             reward = Reward(
                 score=_strict_reward_score(0.0),
@@ -87,6 +101,15 @@ class WhatsAppBusinessTriageEnv:
             }
         )
 
+        # --- God Tier: Adversarial Dynamic State Injection ---
+        if self._state["steps_taken"] >= 3 and not self._state["outbound_messages"]:
+            if "[User Follow-Up]" not in self._state["task"]["inbound_message"]:
+                self._state["task"]["inbound_message"] += "\n\n[User Follow-Up]: Hello?? Are you there? Please respond!"
+        elif not tool_result.get("ok", True):
+            if "[User Follow-Up]" not in self._state["task"]["inbound_message"]:
+                self._state["task"]["inbound_message"] += "\n\n[User Follow-Up]: Is everything okay? I am still waiting..."
+        # -----------------------------------------------------
+
         grader = GRADERS[self._state["task"]["task_id"]]
         graded = grader(self._state)
         done = bool(graded["done"]) or self._state["steps_taken"] >= self._state["max_steps"]
@@ -113,7 +136,11 @@ class WhatsAppBusinessTriageEnv:
         )
 
     def state(self) -> Dict[str, Any]:
-        """Returns the full current environment state."""
+        """Returns the full internal environment state.
+
+        Returns:
+            Dict[str, Any]: Deep-copied structural representation of the CRM, outbound messages, and flags.
+        """
         return deepcopy(self._state)
 
     def _make_observation(self) -> Observation:

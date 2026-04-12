@@ -9,6 +9,9 @@ from typing import Any, Dict, List
 try:
     from rich.console import Console
     from rich.panel import Panel
+    from rich.layout import Layout
+    from rich.live import Live
+    import time
     console = Console(stderr=True)
 except ImportError:
     console = None
@@ -162,18 +165,45 @@ def run_episode(env: WhatsAppBusinessTriageEnv, client: OpenAI, task_id: str) ->
     step_count = 0
     final_reward = 0.0
     rewards_list = []
+    
+    # Cinematic UI State
+    tool_history = []
+    
+    def _build_layout(task: str, current_obs: Any, reward: float, hist: List[str]):
+        if not console:
+            return None
+        layout = Layout()
+        layout.split_row(
+            Layout(name="left", ratio=1),
+            Layout(name="right", ratio=1)
+        )
+        
+        hist_str = "\n".join(hist) if hist else "Awaiting first action..."
+        layout["left"].update(Panel(hist_str, title=f"[bold cyan]Agent Operations: {task}[/bold cyan]", border_style="cyan"))
+        
+        inbound = current_obs.message_body if hasattr(current_obs, 'message_body') else (current_obs.get('message_body', '') if isinstance(current_obs, dict) else '')
+        state_str = f"Ticket: {task}\n\n[bold green]User:[/bold green] {inbound}\n\nLive Reward: {reward:.3f}"
+        layout["right"].update(Panel(state_str, title="[bold green]WhatsApp Environment State[/bold green]", border_style="green"))
+        return layout
 
     print("[START] " + f"task={task_id} env=whatsapp-business-triage-simulator model={MODEL_NAME}", flush=True)
-    if console:
-        console.print(Panel(f"[bold cyan]Starting Episode:[/bold cyan] {task_id}", border_style="cyan"))
 
     while not done and step_count < env.state()["max_steps"]:
         step_count += 1
         state_before = env.state()
-        try:
-            action = _llm_next_action(client, env)
-        except Exception:
-            action = _deterministic_fallback_action(state_before)
+        
+        if console:
+            with Live(_build_layout(task_id, obs, final_reward, tool_history + [f"[yellow]Thinking (Step {step_count})...[/yellow]"]), console=console, refresh_per_second=4, transient=True) as live:
+                try:
+                    action = _llm_next_action(client, env)
+                except Exception:
+                    action = _deterministic_fallback_action(state_before)
+                time.sleep(0.3)
+        else:
+            try:
+                action = _llm_next_action(client, env)
+            except Exception:
+                action = _deterministic_fallback_action(state_before)
 
         result = env.step(action)
         done = result.done
@@ -188,11 +218,12 @@ def run_episode(env: WhatsAppBusinessTriageEnv, client: OpenAI, task_id: str) ->
             "[STEP] " + f"step={step_count} action={action_str} reward={final_reward:.2f} done={done_val} error={error_val}",
             flush=True,
         )
-        if console:
-            action_color = "green" if action.tool != "escalate_to_human" else "yellow"
-            tool_text = f"[{action_color}]{action.tool}[/{action_color}]"
-            console.print(f"  [bold]Step {step_count}:[/bold] Tool = {tool_text} | Reward = [bold green]{final_reward:.2f}[/bold green] | Done = {done}")
         
+        if console:
+            a_tool = action.tool
+            action_color = "green" if a_tool != "escalate_to_human" else "magenta"
+            tool_history.append(f"  [bold]Step {step_count}:[/bold] [{action_color}]{a_tool}[/{action_color}] -> [bold white]Reward:[/bold white] {final_reward:.2f}")
+
         obs = result.observation
 
     success = final_reward >= 0.1
@@ -203,7 +234,8 @@ def run_episode(env: WhatsAppBusinessTriageEnv, client: OpenAI, task_id: str) ->
     )
     if console:
         success_color = "green" if success else "red"
-        console.print(Panel(f"Episode Completed!\nSuccess: [bold {success_color}]{success}[/bold {success_color}]\nFinal Score: [bold white]{final_reward:.3f}[/bold white]\nSteps taken: {step_count}", border_style=success_color))
+        # Print a massive final panel explicitly holding the layout for human review
+        console.print(_build_layout(task_id, obs, final_reward, tool_history + [f"\n[bold {success_color}]Episode Completed! Success: {success}[/bold {success_color}]", f"Final Score: {final_reward:.3f}"]))
 
     return {
         "task_id": task_id,
