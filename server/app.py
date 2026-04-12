@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from env import WhatsAppBusinessTriageEnv
@@ -72,15 +73,9 @@ app = FastAPI(
 _ENV = WhatsAppBusinessTriageEnv(seed=42)
 
 
-@app.get("/", tags=["system"], summary="API root")
-def root() -> Dict[str, Any]:
-    return {
-        "name": "WhatsApp Business Triage Simulator",
-        "status": "ok",
-        "docs": "/docs",
-        "health": "/health",
-        "endpoints": ["/reset", "/step", "/state", "/schema", "/metadata"],
-    }
+@app.get("/", tags=["system"], summary="API root", include_in_schema=False)
+def root():
+    return RedirectResponse(url="/docs")
 
 
 @app.get("/favicon.ico", tags=["system"], include_in_schema=False)
